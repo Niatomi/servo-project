@@ -2,37 +2,21 @@
 #include <Servo.h>
 #include <Adafruit_VL53L0X.h>
 #include <Wire.h>
+#include <math.h>
+#include "servo_config.h"
+#include "statistics_count.h"
 
-#define LID_IS_CONNECTED
-
-const int SERVO_LENGTH = 3;
-int servoPins[SERVO_LENGTH] = {8, 9};
 Servo servo[SERVO_LENGTH];
-
-bool lox_exists = true;
+#include "utils.h"
 
 #ifdef LID_IS_CONNECTED
 Adafruit_VL53L0X lox = Adafruit_VL53L0X();
 #endif
 
-void smooth_move(Servo servo, int angle, int spd)
-{
-  int curr_angle = servo.read();
-  int diff = curr_angle - angle;
-  for (int i = 0; i < abs(diff); i++)
-  {
-    if (curr_angle < angle)
-      servo.write(curr_angle + i);
-    else
-      servo.write(curr_angle - i);
-    delay((10 - spd) * 10);
-  }
-}
-
 void setup()
 {
-#ifdef LID_IS_CONNECTED
   Serial.begin(115200);
+#ifdef LID_IS_CONNECTED
   if (!lox.begin())
   {
     Serial.println("Distance sensor is disabled");
@@ -50,80 +34,55 @@ void setup()
   }
 }
 
-String divide_string(String str_in, int part)
+void move_manipulator(float x, float y, float z)
 {
-  String out, str = str_in;
-  byte div_ind = str.indexOf(' ');
-  for (int i = 0; i < part; i++)
-  {
-    out = str.substring(0, div_ind);
-    str = str.substring(div_ind + 1);
-    div_ind = str.indexOf(' ');
-  }
-  return out;
+  float alfa_base = get_alfa_base(x, y);
+  float x_one = get_x_one(x, l_one, alfa_base);
+  float y_one = get_y_one(y, l_one, alfa_base);
+
+  float alfa_three = get_alfa_three(x, y, z, x_one, y_one, l_two, l_three);
+  float alfa_two = get_alfa_two(x, y, z, l_two, l_three);
+  float alfa_one = get_alfa_one(alfa_two, alfa_three);
+
+  Serial.println(alfa_three);
+  Serial.println(alfa_two);
+  Serial.println(alfa_one);
+
+  // smooth_move(servo[2], alfa_three, servo_speed);
+  // smooth_move(servo[1], alfa_two, servo_speed);
+  // smooth_move(servo[0], alfa_one, servo_speed);
 }
 
-void wait()
-{
-  while (Serial.available() == 0)
-  {
-  }
-}
-
-String read_serial()
-{
-  wait();
-  String cmd = Serial.readString();
-  return cmd;
-}
-
-void py_function(int min_fi, int max_fi,
-                 int min_tetta, int max_tetta,
-                 int cols, int rows,
-                 int stop_time, int speed)
-{
-
-  // fi - угол поврорта
-  // tetta - угол наколна
-  int x_step = (max_fi - min_fi) / rows;
-  int y_step = (max_fi - min_fi) / cols;
-  for (int y = 0; y < rows; y++)
-  {
-
-    smooth_move(servo[1], min_tetta + y * y_step, speed);
-    for (int x = 0; x < cols; x++)
-    {
-#ifdef LID_IS_CONNECTED
-      uint16_t data = lox.readRange();
-      Serial.println(data);
-#endif
-      smooth_move(servo[0], min_fi + x * x_step, speed);
-    }
-  }
-  smooth_move(servo[0], 90, 10);
-  smooth_move(servo[1], 90, 10);
-}
+// Config vars
 
 void parse_and_excecute_commands(String cmd)
 {
-  // cmd.trim();
-  // String begin_cmd = divide_string(cmd, 0);
-  int min_fi = divide_string(cmd, 2).toInt();
-  int max_fi = divide_string(cmd, 3).toInt();
-
-  int min_tetta = divide_string(cmd, 4).toInt();
-  int max_tetta = divide_string(cmd, 5).toInt();
-
-  int cols = divide_string(cmd, 6).toInt();
-  int rows = divide_string(cmd, 7).toInt();
-
-  int stop_time = divide_string(cmd, 8).toInt();
-  int speed = divide_string(cmd, 9).toInt();
-
-  py_function(min_fi, max_fi,
-              min_tetta, max_tetta,
-              cols, rows,
-              stop_time, speed);
+  String begin_cmd = divide_string(cmd, 1);
+  if (begin_cmd.equals("speed"))
+  {
+    servo_speed = divide_string(cmd, 2).toInt();
+  }
+  else if (begin_cmd.equals("move"))
+  {
+    float x = divide_string(cmd, 2).toFloat();
+    float y = divide_string(cmd, 3).toFloat();
+    float z = divide_string(cmd, 4).toFloat();
+    // move chichaaaaaaaaaaaaa
+    move_manipulator(x, y, z);
+  }
+  else if (begin_cmd.equals("grab_open"))
+  {
+    // opens grab
+  }
+  else if (begin_cmd.equals("close_grab"))
+  {
+    // closes grab
+  }
+  else if (begin_cmd.equals("grab_rotate_angle"))
+  {
+    // float angle = divide_string(cmd, 2).toFloat();
+    // moves angle
+  }
 }
 
 void loop()
@@ -131,5 +90,3 @@ void loop()
   String command = read_serial();
   parse_and_excecute_commands(command);
 }
-
-// start 70 130 60 100 10 10 100 10
