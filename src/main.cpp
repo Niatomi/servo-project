@@ -3,17 +3,21 @@
 #include <Adafruit_VL53L0X.h>
 #include <Wire.h>
 
+#define LID_IS_CONNECTED
+
 const int SERVO_LENGTH = 3;
 int servoPins[SERVO_LENGTH] = {8, 9};
 Servo servo[SERVO_LENGTH];
 
 bool lox_exists = true;
 
+#ifdef LID_IS_CONNECTED
 Adafruit_VL53L0X lox = Adafruit_VL53L0X();
-
+#endif
 void setup()
 {
-  Serial.begin(9600);
+#ifdef LID_IS_CONNECTED
+  Serial.begin(115200);
   if (!lox.begin())
   {
     Serial.println("Distance sensor is disabled");
@@ -22,6 +26,7 @@ void setup()
       delay(1000);
     }
   }
+#endif
 
   for (int i = 0; i < SERVO_LENGTH; i++)
   {
@@ -64,47 +69,72 @@ void wait()
   }
 }
 
-void move_by_angles(int angle_fi, int angle_o, int speed)
+String read_serial()
 {
-  smooth_move(servo[0], angle_fi, speed);
-  delay(100);
-  smooth_move(servo[1], angle_o, speed);
-  delay(100);
+  wait();
+  String cmd = Serial.readString();
+  return cmd;
+}
 
-  Serial.println(lox.readRange());
+void py_function(int min_fi, int max_fi,
+                 int min_tetta, int max_tetta,
+                 int cols, int rows,
+                 int stop_time, int speed)
+{
+
+  // fi - угол поврорта
+  // tetta - угол наколна
+  int x_step = (max_fi - min_fi) / rows;
+  int y_step = (max_fi - min_fi) / cols;
+  unsigned long measure_start_time = millis();
+  String data_line = "";
+  for (int y = 0; y < rows; y++)
+  {
+    if (millis() - measure_start_time > stop_time)
+    {
+      return;
+    }
+
+    smooth_move(servo[1], min_tetta + y * y_step, speed);
+    data_line = "";
+    for (int x = 0; x < cols; x++)
+    {
+#ifdef LID_IS_CONNECTED
+      uint16_t data = lox.readRange();
+      data_line += data;
+#endif
+      data_line += " ";
+      smooth_move(servo[0], min_fi + x * x_step, speed);
+    }
+    Serial.println(data_line);
+    data_line = "";
+  }
 }
 
 void parse_and_excecute_commands(String cmd)
 {
-  cmd.trim();
-  int angle_fi = divide_string(cmd, 1).toInt();
-  int angle_o = divide_string(cmd, 2).toInt();
-  int servo_speed = divide_string(cmd, 3).toInt();
+  // cmd.trim();
+  // String begin_cmd = divide_string(cmd, 0);
+  int min_fi = divide_string(cmd, 1).toInt();
+  int max_fi = divide_string(cmd, 2).toInt();
 
-  move_by_angles(angle_fi, angle_o, servo_speed);
-}
+  int min_tetta = divide_string(cmd, 3).toInt();
+  int max_tetta = divide_string(cmd, 4).toInt();
 
-void read_serial()
-{
-  Serial.println("Enter start and commands:");
-  wait();
-  String cmd = Serial.readString();
+  int cols = divide_string(cmd, 5).toInt();
+  int rows = divide_string(cmd, 6).toInt();
 
-  if (cmd != "start\n")
-  {
-    Serial.println("Enter \"start\" instead...");
-    return;
-  }
+  int stop_time = divide_string(cmd, 7).toInt();
+  int speed = divide_string(cmd, 8).toInt();
 
-  String cmds = "";
-  Serial.println("Cmd mode init...");
-  wait();
-
-  cmd = Serial.readString();
-  parse_and_excecute_commands(cmd);
+  py_function(min_fi, max_fi,
+              min_tetta, max_tetta,
+              cols, rows,
+              stop_time, speed);
 }
 
 void loop()
 {
-  read_serial();
+  String command = read_serial();
+  parse_and_excecute_commands(command);
 }
