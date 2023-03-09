@@ -14,10 +14,12 @@ def connection_plata(list_comports='COM1'):
     ArduinoSerial = serial.Serial(com_port, speed, xonxoff=False, timeout = None)  # Установка параметров платы
     return ArduinoSerial
 
+import time
 def get_serial_data(arduino, send_cmd, cols, rows):
     massive = []
     arduino.write(send_cmd.encode()) #Отправка данных на ардуино
     for i in range(cols*rows):  # Тут в скобках указать размерность принимаемого массива сейчас 32 на 32.
+        print(i)
         data = arduino.readline()
         data = data.decode('UTF-8')
         massive.append(int(data))
@@ -33,20 +35,20 @@ def main():
     # print(list_comports)
     
     arduino = connection_plata()
-    
     min_fi = 70
-    max_fi = 110
+    max_fi = 130
     
     min_tetta = 60
     max_tetta = 100
     
-    cols = 3
-    rows = 3
+    cols = 10
+    rows = 10
     
-    stop_time = 0 #не менее 300-400 иначе не успевает измерить
-    speed = 9 #желательно 8-9 иначе может не успевать измерить
+    stop_time = 100 #не менее 300-400 иначе не успевает измерить
+    speed = 10 #желательно 8-9 иначе может не успевать измерить
     
-    send_cmd = f'start {min_fi} {max_fi} {min_tetta} {max_tetta} {cols} {rows} {stop_time} {speed}'
+    # send_cmd = f'start {min_fi} {max_fi} {min_tetta} {max_tetta} {cols} {rows} {stop_time} {speed}'
+    send_cmd = f'start 70 130 60 100 10 10 100 8'
     lidar_data = get_serial_data(arduino, send_cmd, cols, rows)
     
     plt.imshow(lidar_data, cmap='hot', interpolation='nearest', )
